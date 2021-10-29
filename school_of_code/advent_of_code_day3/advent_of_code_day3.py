@@ -16,23 +16,22 @@ class Map_object(Enum):
 
 def parse_input(path: str) -> list:
     with open(path) as f:
-        lines = f.readlines()
-        lines = [line.rstrip() for line in lines]
+        lines = [line.rstrip() for line in f.readlines()]
     return lines
 
 
-def count_trees(slope: Slope, mountain: list):
+def count_trees_hit(slope: Slope, mountain: list):
     wrap_around_width = len(mountain[0])
     number_of_trees = 0
 
-    for i in range(len(mountain)):
-        y = slope.down * i
-        x = (slope.right * i) % wrap_around_width
+    for step in range(len(mountain)):
+        row = slope.down * step
+        colum = (slope.right * step) % wrap_around_width
 
-        if y > len(mountain):
+        if row > len(mountain):
             break
 
-        if mountain[y][x] == Map_object.TREE.value:
+        if mountain[row][colum] == Map_object.TREE.value:
             number_of_trees += 1
 
     return number_of_trees
@@ -44,7 +43,7 @@ def main():
 
     # Part 1
     slope = Slope(right=3, down=1)
-    number_of_trees = count_trees(slope, mountain)
+    number_of_trees = count_trees_hit(slope, mountain)
     print(f"Part 1: Number of trees hit: {number_of_trees}")
 
     # Part 2
@@ -55,7 +54,7 @@ def main():
         Slope(right=7, down=1),
         Slope(right=1, down=2),
     ]
-    result = map(partial(count_trees, mountain=mountain), slopes)
+    result = map(partial(count_trees_hit, mountain=mountain), slopes)
     result = reduce(lambda x, y: x * y, result)
     print(f"Part 2: {result}")
 
