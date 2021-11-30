@@ -31,7 +31,7 @@ def count_required_child_bags_for_bag(parent_bag, rules):
 
 def main():
 
-    rules = Path("school_of_code/advent_of_code_day7/input_small.txt").read_text().split("\n")
+    rules = Path("advent_of_code/2020/advent_of_code_day7/input_small.txt").read_text().split("\n")
 
     print(f"Part 1: {len(find_parent_bags_to_bag('shiny gold bag', rules))}")
     print(f"Part 2: {count_required_child_bags_for_bag('shiny gold bag', rules)}")

@@ -1,7 +1,7 @@
 def main():
     # Part 1
     valid_paswords_count = 0
-    with open("school_of_code/advent_of_code_day2/input.txt") as f:
+    with open("advent_of_code/2020/advent_of_code_day2/input.txt") as f:
         lines = f.readlines()
         for line in lines:
             limits, letter, password = line.split(" ")
@@ -17,7 +17,7 @@ def main():
 
     # Part 2
     valid_paswords_count = 0
-    with open("school_of_code/advent_of_code_day2/input.txt") as f:
+    with open("advent_of_code/2020/advent_of_code_day2/input.txt") as f:
         lines = f.readlines()
         for line in lines:
             positions, letter, password = line.split(" ")

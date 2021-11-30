@@ -37,7 +37,7 @@ def find_factors(sum: int, input: list, number_of_factors) -> list:
 
 
 def main():
-    input = parse_input("school_of_code/advent_of_code_day1/input.txt")
+    input = parse_input("advent_of_code/2020/advent_of_code_day1/input.txt")
     sum = 2020
 
     # Part 1

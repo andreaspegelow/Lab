@@ -3,7 +3,7 @@ from pathlib import Path
 
 def main():
     groups_answers = (
-        Path("school_of_code/advent_of_code_day6/input.txt").read_text().split("\n\n")
+        Path("advent_of_code/2020/advent_of_code_day6/input.txt").read_text().split("\n\n")
     )
 
     count = 0

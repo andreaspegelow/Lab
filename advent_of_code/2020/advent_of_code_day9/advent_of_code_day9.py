@@ -13,7 +13,7 @@ def is_valid(number: int, preamble: set):
 
 
 def main():
-    input = parse_input("school_of_code/advent_of_code_day9/input.txt")
+    input = parse_input("advent_of_code/2020/advent_of_code_day9/input.txt")
     for i in range(25, len(input)):
         if not is_valid(input[i], set(input[i - 25 : i])):
             invalid_number = input[i]

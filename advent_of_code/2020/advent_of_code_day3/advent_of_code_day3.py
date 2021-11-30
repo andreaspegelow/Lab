@@ -39,7 +39,7 @@ def count_trees_hit(slope: Slope, mountain: list):
 
 def main():
 
-    mountain = parse_input("school_of_code/advent_of_code_day3/input.txt")
+    mountain = parse_input("advent_of_code/2020/advent_of_code_day3/input.txt")
 
     # Part 1
     slope = Slope(right=3, down=1)

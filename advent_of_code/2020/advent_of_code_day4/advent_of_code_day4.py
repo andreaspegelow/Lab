@@ -21,7 +21,7 @@ def main():
 
     required_fields = {"byr", "iyr", "eyr", "hgt", "hcl", "ecl", "pid"}
     optional_fields = ["cid"]
-    passport_list = parse_input(Path("school_of_code/advent_of_code_day4/input.txt"))
+    passport_list = parse_input(Path("advent_of_code/2020/advent_of_code_day4/input.txt"))
 
     number_of_valid_passport = 0
     for passport in passport_list:

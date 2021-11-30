@@ -60,14 +60,14 @@ def interpeter(instructions):
 def main():
 
     # Part 1
-    instructions = parse_input("school_of_code/advent_of_code_day8/input.txt")
+    instructions = parse_input("advent_of_code/2020/advent_of_code_day8/input.txt")
     try:
         interpeter(instructions)
     except InfLoopException as e:
         print(e)
 
     # Part 2
-    instructions = parse_input("school_of_code/advent_of_code_day8/input.txt")
+    instructions = parse_input("advent_of_code/2020/advent_of_code_day8/input.txt")
     instructions_copy = instructions
     for i, instruction in enumerate(instructions):
 
