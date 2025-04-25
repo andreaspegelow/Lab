@@ -2,7 +2,33 @@ import feedparser
 import requests
 from pathlib import Path
 import json
-import whisper
+import socket
+import time
+import gc
+
+# Define the log file path
+log_file_path = Path(__file__).parent / "application.log"
+
+
+def log_message(message, duration=None):
+    hostname = f"[{socket.gethostname()}]"
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    duration = f"{f' Took: {seconds_to_string(duration)}' if duration else ''}"
+    with log_file_path.open("a", encoding="utf-8") as log_file:
+        log_file.write(f"[{timestamp}] {hostname:<18} {message:<80}{duration}\n")
+
+
+def seconds_to_string(input_seconds):
+    result = ""
+    min, seconds = divmod(input_seconds, 60)
+    hours, min = divmod(min, 60)
+    if hours > 0:
+        result += f"{int(hours)}h:"
+    if min > 0 or hours > 0:
+        result += f"{int(min)}m:"
+
+    result += f"{round(seconds,2)}s"
+    return result
 
 
 def download_podcast_episodes(rss_feed_url, download_folder):
@@ -22,7 +48,7 @@ def download_podcast_episodes(rss_feed_url, download_folder):
         # Get the episode title and audio URL
         title = entry.title
         audio_url = entry.enclosures[0].href if entry.enclosures else None
-        print(f"Downloading {title} ({index}/{len(feed.entries)})")
+        print(f"({index}/{len(feed.entries)}) Downloading: {title}")
 
         if title.lower().startswith("teaser"):
             print(f"Skipping: {title}")
@@ -36,8 +62,15 @@ def download_podcast_episodes(rss_feed_url, download_folder):
         filename = (
             f"{count:03d}_{title}.mp3".replace("/", "-")
             .replace("\\", "-")
+            .replace(" ", " ")
+            # .replace("- ", "-")
+            .replace(" - ", "-")
+            .replace(" – ", "-")
+            .replace("–", "-")
             .replace(". ", "_")
             .replace(" ", "_")
+            .replace("?", "")
+            .replace('"', "")
         )
         filepath = download_folder / filename
 
@@ -49,6 +82,9 @@ def download_podcast_episodes(rss_feed_url, download_folder):
             downloaded_files.append(filepath)  # Add existing file to the list
             continue
 
+        log_message(f"Starting download:  ({index}/{len(feed.entries)}) {title}")
+        start_time = time.time()
+
         temp_filepath.unlink(missing_ok=True)  # Remove any existing temp file
         response = requests.get(audio_url, stream=True)
         with temp_filepath.open("wb") as f:
@@ -57,6 +93,9 @@ def download_podcast_episodes(rss_feed_url, download_folder):
                     f.write(chunk)
         # Rename the file to remove the temporary suffix after download
         temp_filepath.rename(filepath)
+
+        duration = time.time() - start_time
+        log_message(f"Completed download: {title}", duration=duration)
         print("Done!")
 
         downloaded_files.append(filepath)  # Add newly downloaded file to the list
@@ -66,7 +105,11 @@ def download_podcast_episodes(rss_feed_url, download_folder):
 
 def transcribe_audio(filepaths):
     def transcribe(filepath):
-        transcription_file = filepath.with_suffix(".json")
+        beam_size = 5
+        model_name = "large-v3-turbo"  # Use a larger model for better accuracy
+        transcription_file = (
+            filepath.parent / f"{filepath.stem}_{model_name}_{beam_size}.json"
+        )
         dummy_file = transcription_file.with_suffix(".json.temp")
 
         if dummy_file.exists():
@@ -80,19 +123,23 @@ def transcribe_audio(filepaths):
         # Create a dummy file to indicate transcription is in progress
         dummy_file.touch()
 
+        log_message(f"Starting transcription:  {filepath.name} {model_name} {beam_size}")
+        start_time = time.time()
+
         try:
-            model = whisper.load_model(
-                "large"
-            )  # Use a larger model for better accuracy
+            model = whisper.load_model(model_name)  # Use a larger model for better accuracy
             result = model.transcribe(
                 str(filepath),
                 language="sv",  # Specify the language explicitly
                 verbose=False,
                 word_timestamps=True,
-                beam_size=5,  # Use beam search for better decoding
-                best_of=5,  # Consider multiple decoding paths for higher accuracy
+                beam_size=beam_size,  # Increase beam size for better decoding
+                best_of=beam_size,  # Consider more decoding paths for higher accuracy
             )
-            # Save transcription to a JSON file
+            duration = time.time() - start_time
+            log_message(f"Completed transcription: {filepath.name} {model_name} {beam_size}", duration=duration)
+
+            result["duration"] = duration
             with transcription_file.open("w", encoding="utf-8") as f:
                 json.dump(result, f, ensure_ascii=False, indent=4)
 
@@ -109,6 +156,6 @@ def transcribe_audio(filepaths):
 if __name__ == "__main__":
     # Example usage
     rss_feed_url = "https://feeds.acast.com/public/shows/kafferepet"
-    download_folder = Path(r"\\nas\DM\Work\Pegelow\kaffe\downloads")
+    download_folder = Path(__file__).parent / "downloads"
     downloaded_files = download_podcast_episodes(rss_feed_url, download_folder)
     transcribe_audio(downloaded_files)
