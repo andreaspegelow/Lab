@@ -30,18 +30,15 @@ def write_json(path, file):
         json.dump(file, f, indent=4, sort_keys=False, ensure_ascii=False)
 
 
-def load_json_files(file_path):
+def load_json_files(file_path, limit=None):
     jsons = {}
     files = sorted(list(file_path.glob(f"*{TRANSCRIPT_LEVEL}.json")))
     for i, file in enumerate(files, start=1):
         print(f"({i}/{len(files)}) Loading {file.name}")
         json_file = load_json(file)
-        jsons[file.stem.replace(TRANSCRIPT_LEVEL, "")] = {
-            "transcript": json_file,
-            "audio_path": str(
-                file_path / (file.stem.replace(TRANSCRIPT_LEVEL, "") + ".mp3")
-            ),
-        }
+        jsons[file.stem.replace(TRANSCRIPT_LEVEL, "")] = json_file
+        if limit and i == limit:
+            break
     return jsons
 
 
@@ -49,119 +46,114 @@ def sanitize(word):
     return word.lower().strip().translate(str.maketrans("", "", ",_-.!?"))
 
 
-def find_segments(transcript, keywords, limit=None):
+def find_segments(transcript, phrases):
     print("Finding segments...")
-    for i, (file, content) in enumerate(transcript.items(), start=1):
-        print(f"({i}/{len(transcript)}) Loading {file}")
-        transcript[file]["timestamps"] = {}
-        for phrase in keywords:
-            for segment in content["transcript"]["segments"]:
-                text = sanitize(segment["text"])
-                if phrase.lower() in text:
+    result = {}
+    for i, (name, transcript) in enumerate(transcript.items(), start=1):
+        print(f"({i}/{len(transcript)}) Proccesing: {name}")
+
+        timesamps = []
+        for phrase in phrases:
+            for segment in transcript["segments"]:
+                if sanitize(phrase) in sanitize(segment["text"]):
                     keyword = phrase.split()
-                    first_word_index = [
-                        idx
-                        for idx, word in enumerate(segment["words"])
-                        if sanitize(word["word"]) == sanitize(keyword[0])
-                    ]
 
-                    for idx in first_word_index:
-                        if idx + len(keyword) <= len(segment["words"]):
+                    for idx, word in enumerate(segment["words"]):
+                        if sanitize(keyword[0]) in sanitize(word["word"]) and idx + len(
+                            keyword
+                        ) <= len(segment["words"]):
+                            start_idx = idx
+
                             if all(
-                                sanitize(segment["words"][idx + i]["word"])
-                                == sanitize(keyword[i])
-                                for i in range(len(keyword))
+                                sanitize(keyword[j])
+                                in sanitize(segment["words"][start_idx + j]["word"])
+                                for j in range(len(keyword))
                             ):
-                                if phrase not in transcript[file]["timestamps"]:
-                                    transcript[file]["timestamps"][phrase] = []
-                                transcript[file]["timestamps"][phrase].append(
-                                    {
-                                        "start": segment["words"][idx]["start"],
-                                        "end": segment["words"][idx + len(keyword) - 1][
-                                            "end"
-                                        ],
-                                    }
-                                )
+                                start_ts = segment["words"][start_idx]["start"]
+                                end_ts = segment["words"][start_idx + len(keyword) - 1][
+                                    "end"
+                                ]
+                                timesamps.append({"start": start_ts, "end": end_ts})
+                            break
 
-        if limit and i == limit:
-            break
-
-    return transcript
-
-
-def merge_timestamps(result):
-    print("Merging timestamps...")
-
-    for i, (file, content) in enumerate(result.items(), start=1):
-        if "timestamps" not in content:
-            continue
-        print(f"({i}/{len(result)}) Flattening: {file}")
-        all_timestamps = []
-        for phrase, timestamps in content["timestamps"].items():
-            all_timestamps.extend(timestamps)
-        result[file]["timestamps"]["all_timestamps"] = all_timestamps
-
-    for i, (file, content) in enumerate(result.items()):
-        if "timestamps" not in content:
-            continue
-        print(f"({i}/{len(result)}) Merging: {file}")
-        all_timestamps = []
-        for phrase, timestamps in content["timestamps"].items():
-            all_timestamps.extend(timestamps)
-
-        # Sort timestamps by start time
-        all_timestamps.sort(key=lambda x: x["start"])
-
-        # Merge overlapping or adjacent timestamps within a threshold
-        merged_timestamps = []
-        threshold = 0.5
-        for timestamp in all_timestamps:
-            if (
-                not merged_timestamps
-                or merged_timestamps[-1]["end"] + threshold < timestamp["start"]
-            ):
-                merged_timestamps.append(timestamp)
-            else:
-
-                merged_timestamps[-1]["end"] = max(
-                    merged_timestamps[-1]["end"], timestamp["end"]
-                )
-
-        result[file]["timestamps"]["all_timestamps"] = merged_timestamps
-        result[file]["timestamps"]["total_count"] = len(merged_timestamps)
-        result[file]["audio_path"] = str(download_folder / (file + ".mp3"))
-
-    for file in result:
-        result[file]["transcript"] =[]
-
-    write_json(f"statistics.json", result)
+        result[name] = timesamps
     return result
 
 
-def audio(result, start_padding=0.1, end_padding=0.1):
-    concatenated_audio = AudioSegment.empty()
-    for i, (key, data) in enumerate(result.items(), start=1):
-        print(f"Processing ({i}/{len(result)}) {key}")
-        audio_path = Path(data["audio_path"])
+def merge_timestamps(segments, threshold=0.5):
+    print("Merging timestamps...")
+
+    for i, (name, timestamps) in enumerate(segments.items(), start=1):
+        print(f"({i}/{len(segments)}) Merging: {name}")
+
+        # Sort timestamps by start time
+        timestamps.sort(key=lambda x: x["start"])
+
+        merged = []
+        for timestamp in timestamps:
+            if not merged or merged[-1]["end"] + threshold < timestamp["start"]:
+                merged.append(timestamp)
+            else:
+                merged[-1]["end"] = max(merged[-1]["end"], timestamp["end"])
+        segments[name] = merged
+
+    return segments
+
+
+def load_audio(files):
+    print("Loading audio...")
+    audio = {}
+    for i, (name, timestamps) in enumerate(files.items(), start=1):
+        print(f"({i}/{len(files)}) Loading: {name}")
+        if not timestamps:
+            print(f"\tNo timestamps found for {name}. Skipping...")
+            continue
+
+        audio_path = download_folder / (name + ".mp3")
         if not audio_path.is_file():
             print(f"\tAudio file not found: {audio_path}")
             continue
-        if "timestamps" not in data or "all_timestamps" not in data["timestamps"]:
-            print(f"\tNo timestamps found for {key}")
-            continue
-        audio = AudioSegment.from_file(audio_path)
 
-        for idx, timestamp in enumerate(data["timestamps"]["all_timestamps"], start=1):
-            print(f"\tSegment: ({idx}/{len(data['timestamps']['all_timestamps'])})")
+        audio[name] = AudioSegment.from_file(audio_path)
+    return audio
+
+
+def procces_audio(
+    segments,
+    audios,
+    file_name,
+    start_padding=0.1,
+    end_padding=0.1,
+):
+    concatenated_audio = AudioSegment.empty()
+    print("Cutting audio...")
+    for i, (name, timestamps) in enumerate(segments.items(), start=1):
+        print(f"({i}/{len(segments)}) Processing: {name}")
+        
+        if not timestamps:
+            print(f"\tNo timestamps found for {name}. Skipping...")
+            continue
+        if name not in audios:
+            print(f"\tAudio file not found: {name}")
+            continue
+
+        audio = audios[name]
+
+        for idx, timestamp in enumerate(timestamps, start=1):
+            print(f"\tSegment: ({idx}/{len(timestamps)})")
             start_ms = max(0, int((timestamp["start"] - start_padding) * 1000))
             end_ms = int((timestamp["end"] + end_padding) * 1000)
             segment = audio[start_ms:end_ms]
-            concatenated_audio += segment
+            if concatenated_audio:
+                concatenated_audio = concatenated_audio.append(
+                    segment, crossfade=(start_padding + end_padding) / 2 * 1000
+                )
+            else:
+                concatenated_audio += segment
 
-    print(f"Exporting concatenated audio")
-    concatenated_audio.export(
-        download_folder.parent / f"concatenated2.mp3", format="mp3"
-    )
+    out_file = f"{file_name}.mp3"
+    print(f"Exporting {out_file}")
+    concatenated_audio.export(download_folder.parent / out_file, format="mp3")
 
 
 if __name__ == "__main__":
@@ -169,6 +161,7 @@ if __name__ == "__main__":
     TRANSCRIPT_LEVEL = "_large-v3-turbo_5"
 
     avista_keywords = [
+        "av vista",
         "vista",
         "avista",
         "prima",
@@ -188,7 +181,8 @@ if __name__ == "__main__":
         "for the first time ever",
         "the first time ever",
     ]
-    jsons = load_json_files(download_folder)
+    jsons = load_json_files(download_folder, limit=None)
     avista_segments = find_segments(jsons, avista_keywords)
-    result = merge_timestamps(avista_segments)
-    audio(result, 0.0, 0.0)
+    avista_segments = merge_timestamps(avista_segments, threshold=0.5)
+    audio = load_audio(avista_segments)
+    procces_audio(avista_segments, audio, "out", 0.1, 0.1)

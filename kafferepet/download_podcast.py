@@ -5,6 +5,7 @@ import json
 import socket
 import time
 import gc
+import whisper
 
 # Define the log file path
 log_file_path = Path(__file__).parent / "application.log"
@@ -123,11 +124,15 @@ def transcribe_audio(filepaths):
         # Create a dummy file to indicate transcription is in progress
         dummy_file.touch()
 
-        log_message(f"Starting transcription:  {filepath.name} {model_name} {beam_size}")
+        log_message(
+            f"Starting transcription:  {filepath.name} {model_name} {beam_size}"
+        )
         start_time = time.time()
 
         try:
-            model = whisper.load_model(model_name)  # Use a larger model for better accuracy
+            model = whisper.load_model(
+                model_name
+            )  # Use a larger model for better accuracy
             result = model.transcribe(
                 str(filepath),
                 language="sv",  # Specify the language explicitly
@@ -137,7 +142,10 @@ def transcribe_audio(filepaths):
                 best_of=beam_size,  # Consider more decoding paths for higher accuracy
             )
             duration = time.time() - start_time
-            log_message(f"Completed transcription: {filepath.name} {model_name} {beam_size}", duration=duration)
+            log_message(
+                f"Completed transcription: {filepath.name} {model_name} {beam_size}",
+                duration=duration,
+            )
 
             result["duration"] = duration
             with transcription_file.open("w", encoding="utf-8") as f:
