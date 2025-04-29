@@ -136,6 +136,8 @@ def process_audio_immediately(
                 audio
             ), f"End time {end_ms} exceeds audio length {len(audio)}"
             segment = audio[start_ms:end_ms]
+            segment = segment.pan((1 if idx % 2 == 0 else -1) * 0.7)
+
             if concatenated_audio:
                 if crossfade > 0:
                     if crossfade > len(segment):
@@ -180,7 +182,27 @@ if __name__ == "__main__":
         "for the first time ever",
         "the first time ever",
     ]
-  
+
+    avista_keywords = [
+        "stol",
+        "trappa",
+        "blå",
+        "kuk",
+        "bra",
+        "tack",
+        "va",
+        "inte de",
+        "fisk",
+        "hemma",
+        "Halmstad",
+        "Gud",
+        "trädet",
+        "krogen",
+        "Full",
+        "vetelängd",
+        "älskar",
+    ]
+
     jsons = load_json_files(download_folder, limit=None)
 
     avista_segments = find_segments(jsons, avista_keywords)
@@ -190,6 +212,7 @@ if __name__ == "__main__":
 
     start_padding = 0.1
     end_padding = 0.1
-    process_audio_immediately(avista_segments, "avista", start_padding,end_padding, (start_padding + end_padding) / 2)
-    process_audio_immediately(avista_segments, "avista_cross", start_padding, end_padding, -1)
-    process_audio_immediately(avista_segments, "avista_no_padd", 0, 0, -1)
+    process_audio_immediately(avista_segments, "random", start_padding, end_padding, -1)
+    # process_audio_immediately(avista_segments, "avista", start_padding,end_padding, (start_padding + end_padding) / 2)
+    # process_audio_immediately(avista_segments, "avista_cross", start_padding, end_padding, -1)
+    # process_audio_immediately(avista_segments, "avista_no_padd", 0, 0, -1)
