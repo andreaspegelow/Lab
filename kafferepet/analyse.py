@@ -46,11 +46,11 @@ def sanitize(word):
     return word.lower().strip().translate(str.maketrans("", "", ",_-.!?"))
 
 
-def find_segments(transcript, phrases):
+def find_segments(jsons, phrases):
     print("Finding segments...")
     result = {}
-    for i, (name, transcript) in enumerate(transcript.items(), start=1):
-        print(f"({i}/{len(transcript)}) Proccesing: {name}")
+    for i, (name, transcript) in enumerate(jsons.items(), start=1):
+        print(f"({i}/{len(jsons)}) Finding segments: {name}")
 
         timesamps = []
         for phrase in phrases:
@@ -59,14 +59,14 @@ def find_segments(transcript, phrases):
                     keyword = phrase.split()
 
                     for idx, word in enumerate(segment["words"]):
-                        if sanitize(keyword[0]) in sanitize(word["word"]) and idx + len(
+                        if sanitize(keyword[0]) == sanitize(word["word"]) and idx + len(
                             keyword
                         ) <= len(segment["words"]):
                             start_idx = idx
 
                             if all(
                                 sanitize(keyword[j])
-                                in sanitize(segment["words"][start_idx + j]["word"])
+                                == sanitize(segment["words"][start_idx + j]["word"])
                                 for j in range(len(keyword))
                             ):
                                 start_ts = segment["words"][start_idx]["start"]
@@ -100,11 +100,19 @@ def merge_timestamps(segments, threshold=0.5):
     return segments
 
 
-def load_audio(files):
-    print("Loading audio...")
-    audio = {}
-    for i, (name, timestamps) in enumerate(files.items(), start=1):
-        print(f"({i}/{len(files)}) Loading: {name}")
+def process_audio_immediately(
+    segments,
+    file_name,
+    start_padding=0.1,
+    end_padding=0.1,
+    crossfade=0.1,
+):
+    print("Processing audio...")
+    concatenated_audio = AudioSegment.empty()
+
+    for i, (name, timestamps) in enumerate(segments.items(), start=1):
+        print(f"({i}/{len(segments)}) Processing audio: {name}")
+
         if not timestamps:
             print(f"\tNo timestamps found for {name}. Skipping...")
             continue
@@ -114,40 +122,31 @@ def load_audio(files):
             print(f"\tAudio file not found: {audio_path}")
             continue
 
-        audio[name] = AudioSegment.from_file(audio_path)
-    return audio
-
-
-def procces_audio(
-    segments,
-    audios,
-    file_name,
-    start_padding=0.1,
-    end_padding=0.1,
-):
-    concatenated_audio = AudioSegment.empty()
-    print("Cutting audio...")
-    for i, (name, timestamps) in enumerate(segments.items(), start=1):
-        print(f"({i}/{len(segments)}) Processing: {name}")
-        
-        if not timestamps:
-            print(f"\tNo timestamps found for {name}. Skipping...")
-            continue
-        if name not in audios:
-            print(f"\tAudio file not found: {name}")
-            continue
-
-        audio = audios[name]
+        print(f"\tLoading audio: {audio_path}")
+        audio = AudioSegment.from_file(audio_path)
 
         for idx, timestamp in enumerate(timestamps, start=1):
             print(f"\tSegment: ({idx}/{len(timestamps)})")
             start_ms = max(0, int((timestamp["start"] - start_padding) * 1000))
             end_ms = int((timestamp["end"] + end_padding) * 1000)
+            assert start_ms < len(
+                audio
+            ), f"Start time {start_ms} exceeds audio length {len(audio)}"
+            assert end_ms <= len(
+                audio
+            ), f"End time {end_ms} exceeds audio length {len(audio)}"
             segment = audio[start_ms:end_ms]
             if concatenated_audio:
-                concatenated_audio = concatenated_audio.append(
-                    segment, crossfade=(start_padding + end_padding) / 2 * 1000
-                )
+                if crossfade > 0:
+                    if crossfade > len(segment):
+                        crossfade = len(segment) / 2
+                    concatenated_audio = concatenated_audio.append(
+                        segment, crossfade=crossfade * 1000
+                    )
+                else:
+                    concatenated_audio = concatenated_audio.append(
+                        segment, crossfade=len(segment) / 2
+                    )
             else:
                 concatenated_audio += segment
 
@@ -181,8 +180,16 @@ if __name__ == "__main__":
         "for the first time ever",
         "the first time ever",
     ]
+  
     jsons = load_json_files(download_folder, limit=None)
+
     avista_segments = find_segments(jsons, avista_keywords)
     avista_segments = merge_timestamps(avista_segments, threshold=0.5)
-    audio = load_audio(avista_segments)
-    procces_audio(avista_segments, audio, "out", 0.1, 0.1)
+
+    jsons.clear()
+
+    start_padding = 0.1
+    end_padding = 0.1
+    process_audio_immediately(avista_segments, "avista", start_padding,end_padding, (start_padding + end_padding) / 2)
+    process_audio_immediately(avista_segments, "avista_cross", start_padding, end_padding, -1)
+    process_audio_immediately(avista_segments, "avista_no_padd", 0, 0, -1)
